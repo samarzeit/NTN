@@ -79,28 +79,32 @@ async def generate_flashcards(text, api_key):
     system_prompt = """
 You are an expert assistant for generating high-quality **Anki flashcards** from input text.
 
-You may use light imagination to infer or expand on ideas, as long as they are clearly related to the input and remain educational and relevant to the topic. Avoid unrelated or speculative content.
-If you generate questions, ensure they are clear, concise, and educational, with appropriate options, correct answers, and source references.
-Any generated content should be clearly marked as AI-generated at the end of the question and not falsely attributed to the original document.
-
-
 Your task:
-- Analyze the provided content and identify good multiple-choice or single-choice questions.
-- Generate flashcards using the Anki note type: **AllInOne (kprim, mc, sc)**.
-- Use **clear**, **concise**, and **simple** language. Include examples when appropriate.
-- If possible, cite the source(s) in the 'Sources' field.
-- Do NOT add any explanation, commentary, or extra text — ONLY return valid JSON.
+- Read the input content and generate a balanced set of flashcards.
+- Include **both**:
+  1. Questions taken directly from the input content (clearly marked as "From Content").
+  2. Related questions **inferred by the AI** that are relevant but not directly present in the text (clearly marked as "AI-generated"). Do not generate AI questions if unsure.
+- Ensure AI-generated questions are grounded, educational, and do not speculate.
 
-Flashcard Format:
-- `Question`: The question prompt.
-- `QType (0=kprim,1=mc,2=sc)`: "1" for multiple-choice, "2" for single-choice (always as **string**).
-- `Q_1` to `Q_5`: Up to 5 options (at least 2 required, feel free to add upto 5).
-- `Answers`: A space-separated string of binary values like `"1 0 0"` indicating correct answer(s).
-- `Sources`: Comma-separated sources or leave empty.
-- `Extra 1`: Leave empty unless useful.
-- `Title`: Set an useful title.
+Requirements:
+- Avoid hallucination — keep AI-generated content clearly **connected** to the source topic.
+- Avoid giving away the correct answer by making it **much longer** or more specific than the incorrect options. Keep all options similar in tone and length.
+- Always cite the relevant **text snippet** from the content in the `Sources` field for "From Content" questions.
+- For AI-generated questions, include a brief explanation in the `Extra 1` field justifying the correct answer.
+- If no meaningful AI-generated question can be made, skip it — don’t guess.
+- Use **simple, clear, and concise** language. Add examples where helpful.
 
-Final Output Format (strict):
+Format:
+- `Question`: The actual question, ending with either “(From Content)” or “(AI-generated)”
+- `QType (0=kprim,1=mc,2=sc)`: use "1" or "2" as a **string**
+- `Q_1` to `Q_5`: answer options (min. 2, max. 5)
+- `Answers`: a string like "1 0 0 0 0" marking correct answers
+- `Sources`: paste the part of the content that inspired the question (or leave blank if AI-generated)
+- `Extra 1`: leave blank for "From Content", or add explanation if "AI-generated"
+- `Title`: short and meaningful for the card
+
+Final output must be valid **JSON only**, no extra commentary.
+
 ```json
 {{
   "params": {{
@@ -109,7 +113,7 @@ Final Output Format (strict):
         "deckName": "DeckNameHere",
         "modelName": "AllInOne (kprim, mc, sc)",
         "fields": {{
-          "Question": "your question here",
+          "Question": "your question here (From Content or AI-generated)",
           "QType (0=kprim,1=mc,2=sc)": "2",
           "Q_1": "Option 1",
           "Q_2": "Option 2",
@@ -117,8 +121,8 @@ Final Output Format (strict):
           "Q_4": "",
           "Q_5": "",
           "Answers": "1 0 0",
-          "Sources": "Wikipedia, WHO",
-          "Extra 1": "",
+          "Sources": "Paste relevant content or leave empty if AI",
+          "Extra 1": "Explanation if AI-generated, else leave blank",
           "Title": "Empty title"
         }}
       }}

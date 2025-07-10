@@ -7,10 +7,11 @@ import json
 from docx import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
-import pymupdf
 
-import ocrmypdf
-from PyPDF2 import PdfReader
+from process_docx_file import process_docx
+from process_pdf_file import process_pdf
+
+
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -41,41 +42,16 @@ async def create_deck(deck_name):
         raise
 
 
-# Read docx
-def read_docx(file_path):
-    doc = Document(file_path)
-    return "\n".join(para.text for para in doc.paragraphs if para.text.strip())
-
-def is_text_extractable(file_path):
-    doc = pymupdf.open(file_path)
-    for page in doc:
-        if page.get_text():  # Check for extractable text
-            return True  # Digitally-born PDF
-        return False  # Scanned PDF
-
-def read_pdf(file_path):
-    if not is_text_extractable(file_path):
-        ocrmypdf.ocr(file_path, file_path, language='eng')
-
-    reader = PdfReader(file_path)
-    text = []
-    for page in reader.pages:
-        text.append(page.extract_text())
-
-    return "\n".join(text)
-
-
-def read_file(file_path):
+def process_file(file_path, image_folder="extracted_images"):
     if file_path.endswith('.docx') or file_path.endswith('.doc'):
-        return read_docx(file_path)
+        return process_docx(file_path, image_folder)
     elif file_path.endswith('.pdf'):
-        return read_pdf(file_path)
+        return process_pdf(file_path, image_folder)
 
 
 
 
-
-async def generate_flashcards(text, api_key):
+async def generate_flashcards(text):
     system_prompt = """
 You are an expert assistant for generating high-quality **Anki flashcards** from input text.
 
@@ -110,7 +86,7 @@ Final output must be valid **JSON only**, no extra commentary.
   "params": {{
     "notes": [
       {{
-        "deckName": "DeckNameHere",
+        "deckName": "<suitable deck name>",
         "modelName": "AllInOne (kprim, mc, sc)",
         "fields": {{
           "Question": "your question here (From Content or AI-generated)",
@@ -135,7 +111,7 @@ Now generate flashcards from the following text:
 {text}
 """
     try:
-        os.environ["GOOGLE_API_KEY"] = api_key
+        # os.environ["GOOGLE_API_KEY"] = api_key
         genai_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
         response = await genai_llm.ainvoke(system_prompt.format(text=text))
@@ -162,15 +138,16 @@ async def process_file_and_anki(file_path):
         return
 
     try:
+        os.environ["GOOGLE_API_KEY"] = api_entry.get().strip()
         status_label.config(text="Status: Reading file...")
-        text = read_file(file_path)
+        text = process_file(file_path)
         if text is None:
             status_label.config(text="Status: Idle")
             return
         print("✅ Extracted text from document.")
         status_label.config(text="Status: Generating flashcards with LLM...")
 
-        flashcards_payload = await generate_flashcards(text, api_entry.get().strip())
+        flashcards_payload = await generate_flashcards(text)
         if flashcards_payload is None:
             status_label.config(text="Status: Idle")
             return

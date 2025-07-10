@@ -1,10 +1,12 @@
 # Reference:
 # https://github.com/dhkim0124/anki-mcp-server.git
 
+# === Imports ===
+
+
 import asyncio
 import httpx
 import json
-from docx import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 
@@ -17,12 +19,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 
 
-ANKICONNECT_URL = "http://127.0.0.1:8765"
+# === Constants ===
+ANKICONNECT_URL = "http://127.0.0.1:8765"  # Localhost URL for AnkiConnect
 
 
-
-# AnkiConnect Client
+# === AnkiConnect helper functions ===
 async def anki_connect(action: str, **params):
+    """Send an action request to AnkiConnect API."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             ANKICONNECT_URL,
@@ -31,8 +34,17 @@ async def anki_connect(action: str, **params):
         response.raise_for_status()
         return response.json()
 
+async def check_anki_connection():
+    """Ensure Anki and AnkiConnect are available before proceeding."""
+    try:
+        await anki_connect("version")
+        return True
+    except Exception as e:
+        messagebox.showerror("Anki Error", f"AnkiConnect is not available. Please ensure Anki is running and the add-on is installed.\n\nError: {e}")
+        return False
 
 async def create_deck(deck_name):
+    """Create a deck in Anki (or verify it exists)."""
     try:
         response = await anki_connect("createDeck", deck=deck_name)
         print(f"✅ Created deck '{deck_name}' (or already exists).")
@@ -41,8 +53,10 @@ async def create_deck(deck_name):
         print(f"❌ Failed to create deck '{deck_name}': {e}")
         raise
 
-
+# === File Reader ===
 def process_file(file_path, image_folder="extracted_images"):
+    """Decide whether to process a DOCX or PDF file."""
+
     if file_path.endswith('.docx') or file_path.endswith('.doc'):
         return process_docx(file_path, image_folder)
     elif file_path.endswith('.pdf'):
@@ -50,8 +64,10 @@ def process_file(file_path, image_folder="extracted_images"):
 
 
 
-
+# === Flashcard Generation ===
 async def generate_flashcards(text):
+    """Use Gemini API to generate flashcards in Anki JSON format."""
+
     system_prompt = """
 You are an expert assistant for generating high-quality **Anki flashcards** from input text.
 
@@ -111,7 +127,6 @@ Now generate flashcards from the following text:
 {text}
 """
     try:
-        # os.environ["GOOGLE_API_KEY"] = api_key
         genai_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
         response = await genai_llm.ainvoke(system_prompt.format(text=text))
@@ -132,48 +147,82 @@ Now generate flashcards from the following text:
         messagebox.showerror("LLM Error", f"An error occurred during LLM generation: {e}")
         return None
 
+
+# === Full Process Controller ===
 async def process_file_and_anki(file_path):
+    """Complete processing: extract → generate flashcards → send to Anki."""
+    if not api_entry.get().strip():
+        messagebox.showwarning("No API-key", "Please provide an API key.")
+        return    
+    
     if not file_path:
         messagebox.showwarning("No File Selected", "Please select a file first.")
         return
 
+    os.environ["GOOGLE_API_KEY"] = api_entry.get().strip()
+
+    # Check if Anki is available before any processing
+    if not await check_anki_connection():
+        status_label.config(text="Status: Anki not available.")
+        return
+    
     try:
-        os.environ["GOOGLE_API_KEY"] = api_entry.get().strip()
+
         status_label.config(text="Status: Reading file...")
+        
         text = process_file(file_path)
+        
         if text is None:
             status_label.config(text="Status: Idle")
             return
+        
         print("✅ Extracted text from document.")
+        
         status_label.config(text="Status: Generating flashcards with LLM...")
 
         flashcards_payload = await generate_flashcards(text)
+        
         if flashcards_payload is None:
             status_label.config(text="Status: Idle")
             return
+        
         print("✅ Flashcards generated from LLM.")
+        
         status_label.config(text="Status: Sending flashcards to Anki...")
 
         deck_name = flashcards_payload['params']['notes'][0]['deckName']
+        
         await create_deck(deck_name)
 
         response = await anki_connect("addNotes", **flashcards_payload['params'])
 
         print(response)
         messagebox.showinfo("Success", f"🎉 {len(response['result'])} Flashcards added successfully!")
+        
         status_label.config(text="Status: Done!")
 
     except httpx.RequestError as e:
         messagebox.showerror("Connection Error", f"Could not connect to AnkiConnect. Is Anki running and AnkiConnect installed? Error: {e}")
         status_label.config(text="Status: Error")
     except Exception as e:
-        messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+        if hasattr(e, 'response') and hasattr(e.response, 'json'):
+            error_json = e.response.json()
+            if error_json.get('error', {}).get('message') == 'API key not valid. Please pass a valid API key.':
+                messagebox.showerror("Invalid API Key", "Please enter a valid Gemini API key.")
+            else:
+                messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+        else:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
         status_label.config(text="Status: Error")
+
     finally:
         status_label.config(text="Status: Idle")
 
 
+# === GUI: File and API Input ===
 def browse_file():
+    """Open file picker and load selected file into entry field."""
     file_path = filedialog.askopenfilename(
         filetypes=[("Document Files", "*.docx *.doc *.pdf")]
     )
@@ -182,18 +231,21 @@ def browse_file():
         file_path_entry.insert(0, file_path)
 
 def start_process_gui():
+    """Start the async flashcard generation process from GUI."""
     selected_file = file_path_entry.get()
-    if not selected_file:
-        messagebox.showwarning("No File", "Please select a file before proceeding.")
+    if not selected_file or not api_entry.get().strip():
+        messagebox.showwarning("Missing data", "Please provide the necessary data to proceed.")
         return
-
+    if not os.path.isfile(selected_file):
+        messagebox.showerror("File Error", f"The selected file does not exist:\n{selected_file}")
+        return
     try:
         asyncio.run(process_file_and_anki(selected_file))
     except Exception as e:
         messagebox.showerror("Processing Error", f"Failed to start processing: {e}")
 
 
-# GUI Setup
+# === GUI Layout ===
 root = tk.Tk()
 root.title("Anki Flashcard Generator")
 
@@ -227,5 +279,6 @@ process_button.grid(row=2, column=0, columnspan=3, pady=15)
 status_label = tk.Label(root, text="Status: Idle", bd=1, relief=tk.SUNKEN, anchor=tk.W)
 status_label.pack(side=tk.BOTTOM, fill=tk.X)
 
+# Start GUI loop
 root.mainloop()
 

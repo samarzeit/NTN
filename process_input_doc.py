@@ -41,7 +41,7 @@ def get_image_description(image_folder,api_key):
 
         image_descriptions.append(response.text)
         image_descriptions.append(f"""The file names and locations are: { [os.path.join(image_folder, file_name) for file_name in all_image_file_names[i:i+3]] }""" )
-        print(f"👍 Processed images \n{image_descriptions} ")
+        print(f"👍 Processed images")
         time.sleep(4) # Avoid hitting rate limits (15 requests per minute)
 
     return image_descriptions

@@ -14,7 +14,8 @@ def extract_images_from_pdf(pdf_path, output_folder="extracted_images"):
     for page_index in range(len(doc)):
         page = doc[page_index]
         image_list = page.get_images()
-        print(f'len of images is {len(image_list)}  in page {page_index+1}')
+        print(f'Page {page_index+1} has {len(image_list)} image(s)')
+        # print(f'len of images is {len(image_list)}  in page {page_index+1}')
         for img_index, img in enumerate(image_list):
             xref = img[0]
             base_image = doc.extract_image(xref)

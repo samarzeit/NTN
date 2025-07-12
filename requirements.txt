@@ -1,7 +1,6 @@
 python-docx
 httpx
 pymupdf
-ocrmypdf
 PyPDF2
 google-genai
 langchain_google_genai

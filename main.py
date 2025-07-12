@@ -127,7 +127,7 @@ Now generate flashcards from the following text:
 {text}
 """
     try:
-        genai_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+        genai_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro")
 
         response = await genai_llm.ainvoke(system_prompt.format(text=text))
         llm_text_response = response.content.strip()
@@ -196,7 +196,9 @@ async def process_file_and_anki(file_path):
 
         response = await anki_connect("addNotes", **flashcards_payload['params'])
 
-        print(response)
+        # print(response)
+
+        print(f"\n✅ {len(response['result'])} flashcards added to Anki deck '{deck_name}'.")
         messagebox.showinfo("Success", f"🎉 {len(response['result'])} Flashcards added successfully!")
         
         status_label.config(text="Status: Done!")

@@ -18,7 +18,7 @@ def extract_images_from_docx(docx_path, output_folder="extracted_images"):
                 with open(os.path.join(output_folder, filename), "wb") as f:
                     f.write(docx_zip.read(file))
 
-    print(f"{len(os.listdir(output_folder))} Images extracted to: {output_folder}")
+    print(f"{len(os.listdir(output_folder))} Images extracted and saved in: {output_folder}")
 
 
 
